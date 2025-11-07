@@ -1,30 +1,77 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AlbumCard } from './AlbumCard';
+import { supabase } from '../lib/supabase';
 import type { PublishedReview } from '../types';
 
 export function Gallery() {
   const [reviews, setReviews] = useState<PublishedReview[]>([]);
   const location = useLocation();
 
-  const loadReviews = () => {
-    // Load reviews from localStorage
-    const storedReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
-    setReviews(storedReviews);
+  const loadReviews = async () => {
+    try {
+      // Try to load from Supabase first
+      const { data, error } = await (supabase
+        .from('reviews')
+        .select('*')
+        .order('created_at', { ascending: false }) as any);
+
+      if (error) {
+        console.error('Error loading from Supabase:', error);
+        // Fallback to localStorage
+        const storedReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
+        setReviews(storedReviews);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        // Transform Supabase data to PublishedReview format
+        const reviews: PublishedReview[] = data.map((item: any) => ({
+          id: item.id.toString(),
+          spotifyUrl: item.spotify_url,
+          albumTitle: item.album_title,
+          albumArtist: item.album_artist,
+          albumImageUrl: item.album_image_url,
+          rating: item.rating,
+          comment: item.comment,
+          publishedAt: item.created_at || new Date().toISOString(),
+          created_at: item.created_at,
+        }));
+        setReviews(reviews);
+      } else {
+        // Fallback to localStorage if no Supabase data
+        const storedReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
+        setReviews(storedReviews);
+      }
+    } catch (err) {
+      console.error('Error loading reviews:', err);
+      // Fallback to localStorage
+      const storedReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
+      setReviews(storedReviews);
+    }
   };
 
   useEffect(() => {
     loadReviews();
-    
-    // Listen for storage changes (when reviews are published from another tab/window)
-    const handleStorageChange = () => {
-      loadReviews();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
+
+    // Set up real-time subscription to Supabase
+    const channel = (supabase
+      .channel('reviews-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'reviews',
+        },
+        () => {
+          loadReviews();
+        }
+      ) as any)
+      .subscribe();
+
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      supabase.removeChannel(channel);
     };
   }, [location]); // Reload when location changes
 

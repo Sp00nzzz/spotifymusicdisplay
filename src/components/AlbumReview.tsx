@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getOEmbed } from '../utils/getOEmbed';
 import { getSpotifyAlbum } from '../utils/getSpotifyAlbum';
 import { AlbumCard } from './AlbumCard';
+import { supabase } from '../lib/supabase';
 import type { PublishedReview } from '../types';
 
 export function AlbumReview() {
@@ -107,7 +108,7 @@ export function AlbumReview() {
     }
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!albumImageUrl) {
       setError('Please load an album first');
       return;
@@ -124,31 +125,56 @@ export function AlbumReview() {
     }
 
     // Create review object
-    const review: PublishedReview = {
-      id: Date.now().toString(),
-      spotifyUrl,
-      albumTitle,
-      albumArtist,
-      albumImageUrl,
+    const review = {
+      spotify_url: spotifyUrl,
+      album_title: albumTitle,
+      album_artist: albumArtist,
+      album_image_url: albumImageUrl,
       rating,
       comment,
-      publishedAt: new Date().toISOString(),
     };
 
-    // Save to localStorage
-    const existingReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
-    existingReviews.unshift(review); // Add to beginning
-    localStorage.setItem('publishedReviews', JSON.stringify(existingReviews));
+    try {
+      // Save to Supabase
+      const { data, error } = await supabase
+        .from('reviews')
+        .insert([review] as any)
+        .select()
+        .single();
 
-    console.log('Published review:', review);
+      if (error) {
+        console.error('Error saving to Supabase:', error);
+        // Fallback to localStorage if Supabase fails
+        const fallbackReview: PublishedReview = {
+          id: Date.now().toString(),
+          spotifyUrl,
+          albumTitle,
+          albumArtist,
+          albumImageUrl,
+          rating,
+          comment,
+          publishedAt: new Date().toISOString(),
+        };
+        const existingReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
+        existingReviews.unshift(fallbackReview);
+        localStorage.setItem('publishedReviews', JSON.stringify(existingReviews));
+        setError('Saved locally (Supabase connection failed)');
+      } else {
+        console.log('Published review to Supabase:', data);
+      }
 
-    setIsPublished(true);
-    setError(null);
-    
-    // Navigate to gallery after 1 second
-    setTimeout(() => {
-      navigate('/gallery');
-    }, 1000);
+      setIsPublished(true);
+      setError(null);
+      
+      // Navigate to gallery after 1 second
+      setTimeout(() => {
+        navigate('/gallery');
+      }, 1000);
+    } catch (err) {
+      console.error('Error publishing review:', err);
+      setError('Failed to publish review. Please try again.');
+      setIsPublished(false);
+    }
   };
 
   return (

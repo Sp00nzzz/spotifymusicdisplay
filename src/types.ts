@@ -21,4 +21,5 @@ export interface PublishedReview {
   rating: number;
   comment: string;
   publishedAt: string;
+  created_at?: string; // Supabase timestamp
 }
