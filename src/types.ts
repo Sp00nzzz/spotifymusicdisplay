@@ -22,4 +22,5 @@ export interface PublishedReview {
   comment: string;
   publishedAt: string;
   created_at?: string; // Supabase timestamp
+  userId?: string; // User ID for ownership tracking
 }

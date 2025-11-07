@@ -4,6 +4,10 @@ import { getOEmbed } from '../utils/getOEmbed';
 import { getSpotifyAlbum } from '../utils/getSpotifyAlbum';
 import { AlbumCard } from './AlbumCard';
 import { supabase } from '../lib/supabase';
+import { getUserId } from '../utils/userId';
+import { getSessionId, getClientFingerprint } from '../utils/cookies';
+import { checkClientRateLimit, recordReviewSubmission } from '../utils/rateLimit';
+import { checkServerRateLimit } from '../utils/serverRateLimit';
 import type { PublishedReview } from '../types';
 
 export function AlbumReview() {
@@ -124,7 +128,26 @@ export function AlbumReview() {
       return;
     }
 
-    // Create review object
+    // Check client-side rate limit first (fast check)
+    const clientRateLimit = checkClientRateLimit();
+    if (!clientRateLimit.allowed) {
+      setError(clientRateLimit.message || 'Rate limit exceeded. Please try again later.');
+      return;
+    }
+
+    // Check server-side rate limit (more secure)
+    try {
+      const serverRateLimit = await checkServerRateLimit();
+      if (!serverRateLimit.allowed) {
+        setError(serverRateLimit.message || 'Rate limit exceeded. Please try again later.');
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking server rate limit:', err);
+      // Continue if server check fails (fail open)
+    }
+
+    // Create review object with tracking information
     const review = {
       spotify_url: spotifyUrl,
       album_title: albumTitle,
@@ -132,6 +155,9 @@ export function AlbumReview() {
       album_image_url: albumImageUrl,
       rating,
       comment,
+      user_id: getUserId(),
+      session_id: getSessionId(),
+      client_fingerprint: getClientFingerprint(),
     };
 
     try {
@@ -154,13 +180,18 @@ export function AlbumReview() {
           rating,
           comment,
           publishedAt: new Date().toISOString(),
+          userId: getUserId(),
         };
         const existingReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
         existingReviews.unshift(fallbackReview);
         localStorage.setItem('publishedReviews', JSON.stringify(existingReviews));
         setError('Saved locally (Supabase connection failed)');
+        // Record successful submission for rate limiting
+        recordReviewSubmission();
       } else {
         console.log('Published review to Supabase:', data);
+        // Record successful submission for rate limiting
+        recordReviewSubmission();
       }
 
       setIsPublished(true);

@@ -2,12 +2,56 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AlbumCard } from './AlbumCard';
 import { supabase } from '../lib/supabase';
+import { getUserId } from '../utils/userId';
 import type { PublishedReview } from '../types';
 
 export function Gallery() {
   const [reviews, setReviews] = useState<PublishedReview[]>([]);
   const [selectedReview, setSelectedReview] = useState<PublishedReview | null>(null);
   const location = useLocation();
+
+  const deleteAllReviews = async () => {
+    try {
+      const currentUserId = getUserId();
+      
+      // Delete only reviews that belong to the current user
+      // First, fetch all reviews by this user to get their IDs
+      const { data: userReviews, error: fetchError } = await (supabase
+        .from('reviews')
+        .select('id')
+        .eq('user_id', currentUserId) as any);
+
+      if (!fetchError && userReviews && userReviews.length > 0) {
+        // Delete only the current user's reviews by their IDs
+        const ids = userReviews.map((r: any) => r.id);
+        const { error: supabaseError } = await (supabase
+          .from('reviews')
+          .delete()
+          .in('id', ids) as any);
+
+        if (supabaseError) {
+          console.error('Error deleting from Supabase:', supabaseError);
+        } else {
+          console.log(`Deleted ${userReviews.length} review(s) from Supabase`);
+        }
+      } else if (fetchError) {
+        console.error('Error fetching reviews for deletion:', fetchError);
+      } else {
+        console.log('No reviews found for current user');
+      }
+
+      // Clear localStorage (only for current user's reviews)
+      const storedReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
+      const filteredReviews = storedReviews.filter((r: any) => r.userId !== currentUserId);
+      localStorage.setItem('publishedReviews', JSON.stringify(filteredReviews));
+      console.log('User reviews deleted from localStorage');
+
+      // Reload reviews to update the display
+      loadReviews();
+    } catch (err) {
+      console.error('Error deleting reviews:', err);
+    }
+  };
 
   const loadReviews = async () => {
     try {
@@ -37,6 +81,7 @@ export function Gallery() {
           comment: item.comment,
           publishedAt: item.created_at || new Date().toISOString(),
           created_at: item.created_at,
+          userId: item.user_id,
         }));
         setReviews(reviews);
       } else {
@@ -53,7 +98,8 @@ export function Gallery() {
   };
 
   useEffect(() => {
-    loadReviews();
+    // Delete all reviews on mount
+    deleteAllReviews();
 
     // Set up real-time subscription to Supabase
     const channel = (supabase
