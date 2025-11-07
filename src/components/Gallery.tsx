@@ -6,6 +6,7 @@ import type { PublishedReview } from '../types';
 
 export function Gallery() {
   const [reviews, setReviews] = useState<PublishedReview[]>([]);
+  const [selectedReview, setSelectedReview] = useState<PublishedReview | null>(null);
   const location = useLocation();
 
   const loadReviews = async () => {
@@ -74,6 +75,26 @@ export function Gallery() {
       supabase.removeChannel(channel);
     };
   }, [location]); // Reload when location changes
+
+  // Close modal on ESC key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedReview(null);
+      }
+    };
+
+    if (selectedReview) {
+      document.addEventListener('keydown', handleEscape);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [selectedReview]);
 
   return (
     <div
@@ -174,6 +195,7 @@ export function Gallery() {
             {reviews.map((review) => (
               <div
                 key={review.id}
+                onClick={() => setSelectedReview(review)}
                 style={{
                   background: '#ffffff',
                   borderRadius: '12px',
@@ -183,6 +205,16 @@ export function Gallery() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '8px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 16px rgba(0, 0, 0, 0.04)';
                 }}
               >
                 {/* Album Cover */}
@@ -273,6 +305,178 @@ export function Gallery() {
           </div>
         )}
       </div>
+
+      {/* Modal Overlay */}
+      {selectedReview && (
+        <div
+          onClick={() => setSelectedReview(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              padding: '32px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+              border: '0.5px solid rgba(0, 0, 0, 0.1)',
+              animation: 'slideUp 0.3s ease-out',
+              position: 'relative',
+            }}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setSelectedReview(null)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '24px',
+                color: '#86868b',
+                cursor: 'pointer',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'background 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              ×
+            </button>
+
+            {/* Album Cover */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginBottom: '24px',
+              }}
+            >
+              <AlbumCard imageUrl={selectedReview.albumImageUrl} size={0.6} />
+            </div>
+
+            {/* Album Info */}
+            <div style={{ textAlign: 'center' }}>
+              <h2
+                style={{
+                  fontSize: '24px',
+                  fontWeight: '600',
+                  color: '#1d1d1f',
+                  marginBottom: '8px',
+                  letterSpacing: '-0.3px',
+                  lineHeight: '1.2',
+                }}
+              >
+                {selectedReview.albumTitle}
+              </h2>
+              <p
+                style={{
+                  fontSize: '17px',
+                  color: '#86868b',
+                  margin: '0 0 20px 0',
+                  letterSpacing: '-0.2px',
+                }}
+              >
+                {selectedReview.albumArtist}
+              </p>
+
+              {/* Rating */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  marginBottom: '20px',
+                }}
+              >
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    style={{
+                      fontSize: '24px',
+                      color: star <= selectedReview.rating ? '#ff9500' : '#d2d2d7',
+                    }}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+
+              {/* Comment */}
+              <div
+                style={{
+                  background: '#f5f5f7',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  marginTop: '20px',
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '17px',
+                    color: '#1d1d1f',
+                    margin: 0,
+                    lineHeight: '1.5',
+                    letterSpacing: '-0.2px',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  "{selectedReview.comment}"
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
