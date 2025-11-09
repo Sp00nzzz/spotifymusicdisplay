@@ -29,7 +29,7 @@ export function setCookie(
     secure?: boolean;
   } = {}
 ): void {
-  if (typeof document === 'undefined') return;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
   const {
     days = 365,
@@ -54,7 +54,7 @@ export function setCookie(
  * Delete a cookie
  */
 export function deleteCookie(name: string, path: string = '/'): void {
-  if (typeof document === 'undefined') return;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
   document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=${path};`;
 }
 
@@ -62,6 +62,11 @@ export function deleteCookie(name: string, path: string = '/'): void {
  * Get or create a session ID stored in cookies
  */
 export function getSessionId(): string {
+  // Return a default session ID if running in SSR/build environment
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return 'session_ssr_default';
+  }
+
   const SESSION_COOKIE = 'albumReviewSessionId';
   let sessionId = getCookie(SESSION_COOKIE);
 
@@ -78,35 +83,46 @@ export function getSessionId(): string {
  * Get client fingerprint for additional tracking
  */
 export function getClientFingerprint(): string {
+  // Return a default fingerprint if running in SSR/build environment
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return 'fp_ssr_default';
+  }
+
   const FINGERPRINT_COOKIE = 'albumReviewFingerprint';
   let fingerprint = getCookie(FINGERPRINT_COOKIE);
 
   if (!fingerprint) {
-    // Create a simple fingerprint from available browser info
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    ctx?.fillText('fingerprint', 2, 2);
-    const canvasHash = canvas.toDataURL().slice(-20);
+    try {
+      // Create a simple fingerprint from available browser info
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx?.fillText('fingerprint', 2, 2);
+      const canvasHash = canvas.toDataURL().slice(-20);
 
-    fingerprint = [
-      navigator.userAgent,
-      navigator.language,
-      screen.width,
-      screen.height,
-      new Date().getTimezoneOffset(),
-      canvasHash,
-    ].join('|');
+      fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width,
+        screen.height,
+        new Date().getTimezoneOffset(),
+        canvasHash,
+      ].join('|');
 
-    // Simple hash function
-    let hash = 0;
-    for (let i = 0; i < fingerprint.length; i++) {
-      const char = fingerprint.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
+      // Simple hash function
+      let hash = 0;
+      for (let i = 0; i < fingerprint.length; i++) {
+        const char = fingerprint.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+
+      fingerprint = `fp_${Math.abs(hash).toString(36)}`;
+      setCookie(FINGERPRINT_COOKIE, fingerprint, { days: 365 });
+    } catch (err) {
+      // Fallback if fingerprinting fails
+      fingerprint = `fp_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      setCookie(FINGERPRINT_COOKIE, fingerprint, { days: 365 });
     }
-
-    fingerprint = `fp_${Math.abs(hash).toString(36)}`;
-    setCookie(FINGERPRINT_COOKIE, fingerprint, { days: 365 });
   }
 
   return fingerprint;

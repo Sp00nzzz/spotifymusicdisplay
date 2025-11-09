@@ -10,6 +10,46 @@ export function Gallery() {
   const [selectedReview, setSelectedReview] = useState<PublishedReview | null>(null);
   const location = useLocation();
 
+  const deleteReview = async (reviewId: string, reviewUserId?: string) => {
+    try {
+      const currentUserId = getUserId();
+      
+      // Only allow deletion if the review belongs to the current user
+      if (reviewUserId && reviewUserId !== currentUserId) {
+        console.error('Cannot delete review: not owned by current user');
+        return;
+      }
+
+      // Delete from Supabase
+      const { error: supabaseError } = await (supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('user_id', currentUserId) as any);
+
+      if (supabaseError) {
+        console.error('Error deleting from Supabase:', supabaseError);
+      } else {
+        console.log('Review deleted from Supabase');
+      }
+
+      // Delete from localStorage
+      const storedReviews = JSON.parse(localStorage.getItem('publishedReviews') || '[]') as PublishedReview[];
+      const filteredReviews = storedReviews.filter((r) => r.id !== reviewId);
+      localStorage.setItem('publishedReviews', JSON.stringify(filteredReviews));
+
+      // Reload reviews to update the display
+      loadReviews();
+      
+      // Close modal if the deleted review was selected
+      if (selectedReview?.id === reviewId) {
+        setSelectedReview(null);
+      }
+    } catch (err) {
+      console.error('Error deleting review:', err);
+    }
+  };
+
   const deleteAllReviews = async () => {
     try {
       const currentUserId = getUserId();
@@ -238,7 +278,11 @@ export function Gallery() {
               gap: '16px',
             }}
           >
-            {reviews.map((review) => (
+            {reviews.map((review) => {
+              const currentUserId = getUserId();
+              const isOwner = review.userId === currentUserId;
+              
+              return (
               <div
                 key={review.id}
                 onClick={() => setSelectedReview(review)}
@@ -253,6 +297,7 @@ export function Gallery() {
                   gap: '8px',
                   cursor: 'pointer',
                   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  position: 'relative',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
@@ -263,6 +308,48 @@ export function Gallery() {
                   e.currentTarget.style.boxShadow = '0 2px 16px rgba(0, 0, 0, 0.04)';
                 }}
               >
+                {/* Delete Button - Only show for owner */}
+                {isOwner && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Are you sure you want to delete this review?')) {
+                        deleteReview(review.id, review.userId);
+                      }
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      background: 'rgba(255, 59, 48, 0.9)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '24px',
+                      height: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: '#ffffff',
+                      fontWeight: '600',
+                      zIndex: 10,
+                      transition: 'background 0.2s ease, transform 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 59, 48, 1)';
+                      e.currentTarget.style.transform = 'scale(1.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 59, 48, 0.9)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    title="Delete review"
+                  >
+                    ×
+                  </button>
+                )}
                 {/* Album Cover */}
                 <div
                   style={{
@@ -347,7 +434,8 @@ export function Gallery() {
                   </p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

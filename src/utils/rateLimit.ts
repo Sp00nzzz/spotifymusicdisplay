@@ -28,6 +28,15 @@ const COOKIE_KEY = 'albumReviewRateLimit';
  * Check client-side rate limit using cookies and localStorage
  */
 export function checkClientRateLimit(): RateLimitResult {
+  // Return allowed if running in SSR/build environment
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return {
+      allowed: true,
+      remaining: RATE_LIMIT_CONFIG.maxReviews,
+      resetAt: Date.now() + RATE_LIMIT_CONFIG.windowMs,
+    };
+  }
+
   const now = Date.now();
   
   // Get rate limit data from localStorage
@@ -85,6 +94,8 @@ export function checkClientRateLimit(): RateLimitResult {
  * Record a review submission (call this after successful submission)
  */
 export function recordReviewSubmission(): void {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+
   const now = Date.now();
   const stored = localStorage.getItem(STORAGE_KEY);
   let rateLimitData: { count: number; windowStart: number; lastReview: number } = stored
@@ -107,6 +118,13 @@ export function recordReviewSubmission(): void {
  * Get current rate limit status
  */
 export function getRateLimitStatus(): { remaining: number; resetAt: number } {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return {
+      remaining: RATE_LIMIT_CONFIG.maxReviews,
+      resetAt: Date.now() + RATE_LIMIT_CONFIG.windowMs,
+    };
+  }
+
   const now = Date.now();
   const stored = localStorage.getItem(STORAGE_KEY);
   let rateLimitData: { count: number; windowStart: number; lastReview: number } = stored

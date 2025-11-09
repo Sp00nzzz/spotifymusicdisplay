@@ -5,6 +5,11 @@ import { getCookie, setCookie } from './cookies';
  * Uses both cookies and localStorage for better persistence
  */
 export function getUserId(): string {
+  // Return a default user ID if running in SSR/build environment
+  if (typeof window === 'undefined') {
+    return 'user_ssr_default';
+  }
+
   const STORAGE_KEY = 'albumReviewUserId';
   const COOKIE_KEY = 'albumReviewUserId';
   
@@ -12,18 +17,22 @@ export function getUserId(): string {
   let userId = getCookie(COOKIE_KEY);
   
   // Fallback to localStorage
-  if (!userId) {
+  if (!userId && typeof localStorage !== 'undefined') {
     userId = localStorage.getItem(STORAGE_KEY);
   }
   
   // Generate new ID if none exists
   if (!userId) {
     userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-    localStorage.setItem(STORAGE_KEY, userId);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, userId);
+    }
     setCookie(COOKIE_KEY, userId, { days: 365 });
   } else {
     // Sync to both storage methods
-    localStorage.setItem(STORAGE_KEY, userId);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, userId);
+    }
     setCookie(COOKIE_KEY, userId, { days: 365 });
   }
   
