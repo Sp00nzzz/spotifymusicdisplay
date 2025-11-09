@@ -22,7 +22,7 @@ export async function checkServerRateLimit(): Promise<ServerRateLimitResult> {
     const clientFingerprint = getClientFingerprint();
 
     // Call the Supabase function
-    const { data, error } = await supabase.rpc('check_rate_limit', {
+    const { data, error } = await (supabase.rpc as any)('check_rate_limit', {
       p_user_id: userId,
       p_session_id: sessionId,
       p_client_fingerprint: clientFingerprint,
@@ -43,10 +43,10 @@ export async function checkServerRateLimit(): Promise<ServerRateLimitResult> {
     }
 
     return {
-      allowed: data.allowed,
-      remaining: data.remaining || 0,
-      resetAt: data.reset_at,
-      message: data.message,
+      allowed: data?.allowed ?? true,
+      remaining: data?.remaining ?? 0,
+      resetAt: data?.reset_at ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      message: data?.message,
     };
   } catch (err) {
     console.error('Error checking server rate limit:', err);

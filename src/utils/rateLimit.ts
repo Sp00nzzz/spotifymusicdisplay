@@ -2,7 +2,7 @@
  * Rate limiting utility to prevent spam
  * Uses both client-side (cookies/localStorage) and server-side (Supabase) checks
  */
-import { getCookie, setCookie } from './cookies';
+import { setCookie } from './cookies';
 
 interface RateLimitResult {
   allowed: boolean;
@@ -111,7 +111,7 @@ export function recordReviewSubmission(): void {
   }
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(rateLimitData));
-  setCookie(COOKIE_KEY, JSON.stringify(rateLimitData), 1);
+  setCookie(COOKIE_KEY, JSON.stringify(rateLimitData), { days: 1 });
 }
 
 /**
